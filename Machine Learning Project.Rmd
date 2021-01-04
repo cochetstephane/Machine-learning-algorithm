@@ -1,0 +1,137 @@
+---
+title: "Machine Learning Course"
+author: "Stephane C."
+date: "04/01/2021"
+output: html_document
+---
+# Preambule
+
+I load some libraries (dplyr, caret, randomForest) which are needed for the following steps. As they are quite verbose when loaded, I have chosen to mask them in the .html document
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(randomForest)
+library(caret)
+```
+
+# Preliminary
+
+Devices exist to collect a large amount of datas at a low cost. In this example, datas are collected with accelerometers on the belt, forearm, arm and dumbell of 6 participants. They are told to perform it correctly and incorrectly and this step contributes to the training set of our algorithm. This is known as a supervised learning algorithm. During various preliminary tests with the caret package, I found out that Random Forest Algorithm provides a good performance 
+
+# Loading datas 
+
+During exploratory analysis phase, I found out important to take care of NA, missing values, #DIV/0 values and categorize them as NA values. Hereafter are the train and test data set
+
+```{r data}
+
+train <- read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"),
+                      na.strings = c("", "NA", "#DIV/0!"))
+
+test <- read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"),
+                      na.strings = c("", "NA", "#DIV/0!"))
+```
+
+# Train data set
+
+```{r dimensions1}
+dim(train)
+```
+
+# Test data set
+
+```{r dimensions2}
+dim(test)
+```
+
+# Dealing with the train data set (1/2)
+
+The NA values need to be managed properly, the following feature is managing most of them. We can review then which are the columns which still have NA values
+
+```{r managing_data_set1}
+
+train[sapply(train, is.numeric)] <- lapply(train[sapply(train, is.numeric)], function(x) ifelse(is.na(x), mean(x, na.rm = TRUE), x))
+
+na_count <- sapply(train, function(y) sum(length(which(is.na(y)))))
+# listing of missing NA values 
+na_count <- data.frame(na_count)
+which(na_count > 0)
+
+training_bis <- select_if(train, is.numeric)  
+training_ter <- select_if(train, is.factor)  
+training_qua <- select_if(train, is.logical)
+
+head(training_ter,3)
+head(training_qua,3)
+```
+
+# Dealing with the train data set (2/2)
+
+There are still 6 columns with NA values.
+
+Training_bis has the first 4 columns which are not valuable for prediction of the variable classe.
+
+Training_ter has only the class variable which is valuable (others are dismissed)
+
+Training_qua is full of NA values (it can be dismissed)
+
+The data set training is then re-created and then it goes through the function NZV ( Near Zero Variance) to detect variables with low variance. They can be omitted from the model
+
+```{r managing_data_set2}
+
+training_bis <- training_bis[,-c(1:4)]
+training_ter <- training_ter[,"classe"]
+training <- cbind(training_bis,training_ter)
+colnames(training)[147] <- "classe"
+
+NZV <- nearZeroVar(training)
+training <- training[, -NZV]
+
+dim(training)
+```
+
+We define a train set (60%)  and a validate set (40%) to evaluate our model before running it on the test set. We also use a cross validation scheme with a number of folds set to 5 and a seed value for reproducibility
+
+```{r train&validate}
+
+set.seed(1234)
+
+inTrain = createDataPartition(train$classe, p = 0.6, list = FALSE)
+train = training[ inTrain,]
+validate = training[-inTrain,]
+
+cvCtrl <- trainControl(method="cv", number=5)
+```
+
+After different tentatives of various models, I found out that the Random Forest from the randomForest package was running smoother (quicker) than the same model from the caret package. I decided to use it by selecting a "Cross Validation" model with 5 folds
+
+```{r random_forest}
+modRF <- randomForest(classe ~ . , data = train, trControl = cvCtrl)
+```
+
+I evaluate the performance of the model by running it on the validate model on which we know the outcome. To be clear on the process, I retrieve the classe parameter (column 53) from the validate set 
+
+```{r Matrix}
+resRF <- predict(modRF, newdata = validate[,-53])
+
+confusionMatrix(resRF, validate$classe)
+
+RFmatrix <- confusionMatrix(resRF, validate$classe)
+```
+
+# Expected out of sample error
+
+Since I have retrieved a validate set from the training set, I can evaluate a good result obtained from a dataset new to the algorithm (Accuracy 99.4%)
+
+```{r out_of_sample_error}
+RFmatrix$overall[1]
+RFmatrix$table
+```
+
+# Application to the test set to predict the outcome
+
+```{r final_predict}
+resRF <- predict(modRF, newdata = test, type = "class")
+resRF
+```
+
