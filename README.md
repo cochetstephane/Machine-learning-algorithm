@@ -5,3 +5,8 @@ They are told to perform it correctly and incorrectly and this step contributes 
 During various preliminary tests with the caret package, I found out that Random Forest Algorithm provides a good performance
 
 The html file is located in the docs folder
+
+The url address pointed by Coursera is:
+
+https://cochetstephane.github.io/Machine-learning-algorithm/Machine-Learning-Project.html
+
